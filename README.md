@@ -4,6 +4,6 @@ Make sure you download the required libraries:
 - GLM
 - GLEW 
 
-> learn to read CMakeLists.txt
+> Learn to read CMakeLists.txt
 
 Also, this is for Linux (notice `/usr/include`).
