@@ -108,8 +108,8 @@ void init() {
     glEnableVertexAttribArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
-    std::string vstext = textFileRead("../vertex.vert");
-    std::string fstext = textFileRead("../fragment.frag");
+    std::string vstext = textFileRead("vertex.vert");
+    std::string fstext = textFileRead("fragment.frag");
     const char *vertex_shader = vstext.c_str();
     const char *fragment_shader = fstext.c_str();
     GLuint vs = glCreateShader(GL_VERTEX_SHADER);
