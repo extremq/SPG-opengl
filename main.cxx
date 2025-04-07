@@ -1,13 +1,9 @@
 #include <iostream>
 #include <fstream>
 #include <string>
-#include <stack>
-
 #include <stdio.h>
-
 #include <GL/glew.h>
 #include <GL/freeglut.h>
-
 #include <glm/mat4x4.hpp>
 #include <glm/gtx/transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -16,54 +12,75 @@
 #define PI glm::pi<float>()
 
 GLuint shader_programme, vao;
-glm::mat4 projectionMatrix, viewMatrix;
+glm::mat4 projectionMatrix, viewMatrix, modelMatrix;
 
-std::stack <glm::mat4> modelStack;
+int nrFaces = 6;
+int nrVerticesPerFace = 6;
+int nrVertices = nrFaces * nrVerticesPerFace;
 
-float segment1 = 2; //lungimea bratului
-float segment1Angle = 0; //unghiul de rotatie al bratului
-float segment2 = 3; //lungimea antebratului
-float segment2Angle = 0; //unghiul de rotatie al antebratului
-float segment3 = 1; //lungimea degetului
-float segment3Angle = 0; //unghiul de rotatie al degetului
+glm::vec3 lightPos(0, 1, 5);
+glm::vec3 viewPos(2, 3, 6);
 
-float points[] = {
-	-0.5f,  -0.5f,  -0.5f,
-	-0.5f, 0.5f,  -0.5f,
-	-0.5f, 0.5f,  -0.5f,
-	0.5f,  0.5f, -0.5f,
-	0.5f,  0.5f, -0.5f,
-	0.5f, -0.5f,  -0.5f,
-	0.5f, -0.5f,  -0.5f,
-	- 0.5f,  -0.5f,  -0.5f,
+float L = 0.5f;
 
-	-0.5f,  -0.5f,  0.5f,
-	-0.5f, 0.5f,  0.5f,
-	-0.5f, 0.5f,  0.5f,
-	0.5f,  0.5f, 0.5f,
-	0.5f,  0.5f, 0.5f,
-	0.5f, -0.5f,  0.5f,
-	0.5f, -0.5f,  0.5f,
-	-0.5f,  -0.5f,  0.5f,
+//trebuie adaugate coordonatele vectorilor normali pentru fiecare vertex, pe langa pozitie
+float cube[] = {
+    // face x positive
+    L, -L, -L,  1, 0, 0,
+    L, -L, L,    1, 0, 0,
+    L, L, L,     1, 0, 0,
 
-	-0.5f,  -0.5f,  0.5f,
-	-0.5f,  -0.5f,  -0.5f,
-	-0.5f, 0.5f,  0.5f,
-	-0.5f, 0.5f,  -0.5f,
-	0.5f,  0.5f, 0.5f,
-	0.5f,  0.5f, -0.5f,
-	0.5f, -0.5f,  0.5f,
-	0.5f, -0.5f,  -0.5f,
+    L, -L, -L,   1, 0, 0,
+    L, L, -L,    1, 0, 0,
+    L, L, L,     1, 0, 0,
 
-	0.0f, 0.0f, 0.0f,
-	16.0f, 0.0f, 0.0f,
-	0.0f, 0.0f, 0.0f,
-	0.0f, 8.0f, 0.0f,
-	0.0f, 0.0f, 0.0f,
-	0.0f, 0.0f, 24.0f,
+    // face x negative
+    -L, -L, -L,  -1, 0, 0,
+    -L, L, -L,   -1, 0, 0,
+    -L, L, L,    -1, 0, 0,
+
+    -L, -L, -L,  -1, 0, 0,
+    -L, -L, L,   -1, 0, 0,
+    -L, L, L,    -1, 0, 0,
+
+    // face y positive
+    L, L, -L,    0, 1, 0,
+    L, L, L,     0, 1, 0,
+    -L, L, L,    0, 1, 0,
+
+    L, L, -L,    0, 1, 0,
+    -L, L, -L,   0, 1, 0,
+    -L, L, L,    0, 1, 0,
+
+    // face y negative
+    L, -L, -L,   0, -1, 0,
+    L, -L, L,    0, -1, 0,
+    -L, -L, L,   0, -1, 0,
+
+    L, -L, -L,   0, -1, 0,
+    -L, -L, -L,  0, -1, 0,
+    -L, -L, L,   0, -1, 0,
+
+    // face z positive
+    L, -L, L,    0, 0, 1,
+    L, L, L,     0, 0, 1,
+    -L, L, L,    0, 0, 1,
+
+    L, -L, L,    0, 0, 1,
+    -L, -L, L,   0, 0, 1,
+    -L, L, L,    0, 0, 1,
+
+    // face z negative
+    L, -L, -L,   0, 0, -1,
+    L, L, -L,    0, 0, -1,
+    -L, L, -L,   0, 0, -1,
+
+    L, -L, -L,   0, 0, -1,
+    -L, -L, -L,  0, 0, -1,
+    -L, L, -L,   0, 0, -1
 };
 
-std::string textFileRead(char *fn) 
+std::string textFileRead(char *fn)
 {
 	std::ifstream ifile(fn);
 	std::string filetext;
@@ -75,59 +92,68 @@ std::string textFileRead(char *fn)
 	return filetext;
 }
 
+void printShaderInfoLog(GLuint obj)
+{
+	int infologLength = 0;
+	int charsWritten = 0;
+	char *infoLog;
+
+	glGetShaderiv(obj, GL_INFO_LOG_LENGTH, &infologLength);
+
+	if (infologLength > 0)
+	{
+		infoLog = (char *)malloc(infologLength);
+		glGetShaderInfoLog(obj, infologLength, &charsWritten, infoLog);
+		printf("%s\n", infoLog);
+		free(infoLog);
+	}
+}
+
+void printProgramInfoLog(GLuint obj)
+{
+	int infologLength = 0;
+	int charsWritten = 0;
+	char *infoLog;
+
+	glGetProgramiv(obj, GL_INFO_LOG_LENGTH, &infologLength);
+
+	if (infologLength > 0)
+	{
+		infoLog = (char *)malloc(infologLength);
+		glGetProgramInfoLog(obj, infologLength, &charsWritten, infoLog);
+		printf("%s\n", infoLog);
+		free(infoLog);
+	}
+}
+
+float rotAngle = 0;
+float rotAngleInc = PI / 64;
+
 void display()
 {
-	glClear(GL_COLOR_BUFFER_BIT);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glUseProgram(shader_programme);
 
-	float rotationAngle = PI / 2;
-	glm::mat4 modelMatrix = glm::mat4(1.0f);
+	modelMatrix = glm::mat4(1.0f);
 
 	glBindVertexArray(vao);
-	GLuint matrixID = glGetUniformLocation(shader_programme, "modelViewProjectionMatrix");
-
-	////desenare axe coordonate
 	
-	glUniformMatrix4fv(matrixID, 1, GL_FALSE, glm::value_ptr(projectionMatrix * viewMatrix * modelMatrix));
-	glDrawArrays(GL_LINES, 24, 6);
+	GLuint lightPosLoc = glGetUniformLocation(shader_programme, "lightPos");
+	glUniform3fv(lightPosLoc, 1, glm::value_ptr(lightPos));
 
-	//brat
-	modelMatrix *= glm::rotate(segment1Angle, glm::vec3(0, 0, 1));
-	modelMatrix *= glm::translate(glm::vec3(segment1 / 2.0f, 0, 0));
+	GLuint viewPosLoc = glGetUniformLocation(shader_programme, "viewPos");
+	glUniform3fv(viewPosLoc, 1, glm::value_ptr(viewPos));
+
+	modelMatrix *= glm::rotate(rotAngle, glm::vec3(0, 1, 0));
+	GLuint modelMatrixLoc = glGetUniformLocation(shader_programme, "mvpMatrix");
+	glUniformMatrix4fv(modelMatrixLoc, 1, GL_FALSE, glm::value_ptr(projectionMatrix * viewMatrix * modelMatrix));
 	
-	modelStack.push(modelMatrix);
-		modelMatrix *= glm::scale(glm::vec3(segment1, 0.5, 0.5));
-
-		glUniformMatrix4fv(matrixID, 1, GL_FALSE, glm::value_ptr(projectionMatrix * viewMatrix * modelMatrix));
-		glDrawArrays(GL_LINES, 0, 24);
-	modelMatrix = modelStack.top();
-	modelStack.pop();
-
-	// antebrat
-	modelMatrix *= glm::translate(glm::vec3(segment1 / 2.0f, 0, 0));
-	modelMatrix *= glm::rotate(segment2Angle, glm::vec3(0, 0, 1));
-	modelMatrix *= glm::translate(glm::vec3(segment2 / 2.0f, 0, 0));
-
-	modelStack.push(modelMatrix);
-		modelMatrix *= glm::scale(glm::vec3(segment2, 0.5, 0.5));
-
-		glUniformMatrix4fv(matrixID, 1, GL_FALSE, glm::value_ptr(projectionMatrix * viewMatrix * modelMatrix));
-		glDrawArrays(GL_LINES, 0, 24);
-	modelMatrix = modelStack.top();
-	modelStack.pop();
-
-    // deget
-	modelMatrix *= glm::translate(glm::vec3(segment2 / 2.0f, 0, 0));
-	modelMatrix *= glm::rotate(segment3Angle, glm::vec3(0, 0, 1));
-	modelMatrix *= glm::translate(glm::vec3(segment3 / 2.0f, 0, 0));
-
-	modelStack.push(modelMatrix);
-		modelMatrix *= glm::scale(glm::vec3(segment3, 0.5, 0.5));
-
-		glUniformMatrix4fv(matrixID, 1, GL_FALSE, glm::value_ptr(projectionMatrix * viewMatrix * modelMatrix));
-		glDrawArrays(GL_LINES, 0, 24);
-	modelMatrix = modelStack.top();
-	modelStack.pop();
+	// se determina matricea ce realizeaza corectia normalelor. Ea se trimite catre vertex shader la fel cum s-a procedat si cu mvpMatrix 
+    GLuint normalMatrixLoc = glGetUniformLocation(shader_programme, "normalMatrix");
+	glm::mat4 normalMatrix = glm::transpose(glm::inverse(modelMatrix));
+    glUniformMatrix4fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
+	
+	glDrawArrays(GL_TRIANGLES, 0, nrVertices);
 
 	glFlush();
 }
@@ -141,21 +167,29 @@ void init()
 	printf("OpenGL version supported %s\n", version);
 
 	glClearColor(1, 1, 1, 0);
+	glEnable(GL_DEPTH_TEST);
 
 	glewInit();
 
-	GLuint vbo = 1;
-	glGenBuffers(1, &vbo);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo);
-	glBufferData(GL_ARRAY_BUFFER, 90 * sizeof(float), points, GL_STATIC_DRAW);
+    GLuint vbo = 1;
+    glGenBuffers(1, &vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(cube), cube, GL_STATIC_DRAW);
 
 	vao = 0;
 	glGenVertexArrays(1, &vao);
 	glBindVertexArray(vao);
-	glEnableVertexAttribArray(0);
 	glBindBuffer(GL_ARRAY_BUFFER, vbo);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+    
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), NULL);
 
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+
+	//normalele se trimit la vertex shader ca atributul cu index 1, asa cum s-a procedat in cazul culorilor la Lab 7
+	//atentie la parametrii stride si offset ai functiei glVertexAttribPointer
+	
 	std::string vstext = textFileRead("vertex.vert");
 	std::string fstext = textFileRead("fragment.frag");
 	const char* vertex_shader = vstext.c_str();
@@ -172,39 +206,15 @@ void init()
 	glAttachShader(shader_programme, fs);
 	glAttachShader(shader_programme, vs);
 	glLinkProgram(shader_programme);
-}
 
-void keyboard(unsigned char key, int x, int y)
-{
-	switch (key)
-	{
-	case 'w':
-		segment1Angle += 0.1;
-			break;
-	case 'e':
-		segment1Angle -= 0.1;
-			break;
-    case 's':
-        segment2Angle += 0.1;
-        break;
-    case 'd':
-        segment2Angle -= 0.1;
-        break;
-    case 'x':
-        segment3Angle += 0.1;
-        break;
-    case 'c':
-        segment3Angle -= 0.1;
-        break;
-	}
-	glutPostRedisplay();
+	printShaderInfoLog(shader_programme);
+	printProgramInfoLog(shader_programme);
 }
-
 
 void reshape(int w, int h)
 {
 	glViewport(0, 0, w, h);
-	projectionMatrix = glm::perspective(PI / 3, (float)w / h, 0.1f, 100.0f);
+	projectionMatrix = glm::perspective(PI / 6, (float)w / h, 0.1f, 100.0f);
 	/*
 	viewMatrix este matricea transformarii de observare. Parametrii functiei
 	lookAt sunt trei vectori ce reprezinta, in ordine:
@@ -212,14 +222,27 @@ void reshape(int w, int h)
 	- punctul catre care priveste observatorul
 	- directia dupa care este orientat observatorul
 	*/
-	viewMatrix = glm::lookAt(glm::vec3(0, 0, 10),	glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+	viewMatrix = glm::lookAt(viewPos, glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+}
+
+void keyboard(unsigned char key, int x, int y)
+{
+	switch (key)
+	{
+	case 'a':
+		rotAngle += rotAngleInc;
+		break;
+	case 's':
+		rotAngle -= rotAngleInc;
+		break;
+	}
+	glutPostRedisplay();
 }
 
 int main(int argc, char** argv)
 {
-
 	glutInit(&argc, argv);
-	glutInitDisplayMode(GLUT_RGB | GLUT_SINGLE);
+	glutInitDisplayMode(GLUT_RGB | GLUT_DEPTH | GLUT_SINGLE);
 	glutInitWindowPosition(200, 200);
 	glutInitWindowSize(700, 700);
 	glutCreateWindow("SPG");
@@ -229,7 +252,6 @@ int main(int argc, char** argv)
 	glutDisplayFunc(display);
 	glutReshapeFunc(reshape);
 	glutKeyboardFunc(keyboard);
-
 	glutMainLoop();
 
 	return 0;
